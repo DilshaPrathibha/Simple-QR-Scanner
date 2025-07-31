@@ -3,60 +3,85 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Real-Time QR Scanner</title>
+  <title>QR Scanner</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #f4f6f8;
-      color: #333;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(145deg, #0f2027, #203a43, #2c5364);
+      color: #ffffff;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 40px 20px;
+      justify-content: flex-start;
+      min-height: 100vh;
+      padding: 30px 20px;
     }
-    h1 {
-      font-size: 2rem;
-      margin-bottom: 20px;
-      color: #2c3e50;
-    }
+    h1 { font-size: 2rem; margin-bottom: 20px; color: #ffffff; }
     #qr-reader {
-      width: 320px;
-      max-width: 100%;
-      border: 2px solid #ccc;
-      border-radius: 8px;
-      background: white;
+      width: 100%;
+      max-width: 360px;
+      background: #111;
+      border-radius: 10px;
       padding: 10px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
     }
     #qr-result, #link-preview {
       margin-top: 20px;
-      font-size: 1.1em;
       text-align: center;
+      font-size: 1rem;
+      color: #00e6e6;
     }
     #link-preview a {
-      color: #3498db;
+      color: #66ffff;
       text-decoration: none;
-      font-weight: bold;
     }
-    #link-preview a:hover {
-      text-decoration: underline;
+    #link-preview a:hover { text-decoration: underline; }
+    #controls {
+      margin-top: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
     }
+    .btn {
+      background: #00bcd4;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 18px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    .btn:hover { background: #0097a7; }
+    .drop-zone {
+      margin-top: 10px;
+      padding: 20px;
+      border: 2px dashed #00e6e6;
+      border-radius: 10px;
+      text-align: center;
+      color: #aaa;
+      cursor: pointer;
+      background-color: rgba(255, 255, 255, 0.05);
+      transition: background-color 0.3s;
+    }
+    .drop-zone:hover { background-color: rgba(255, 255, 255, 0.1); }
+    .drop-zone input[type="file"] { display: none; }
     #history {
       margin-top: 30px;
       width: 100%;
       max-width: 400px;
-      background: #fff;
-      border: 1px solid #ddd;
-      border-radius: 8px;
+      background: #1a1a1a;
+      border-radius: 10px;
       padding: 15px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 0 10px rgba(0, 255, 255, 0.1);
     }
     #history h2 {
       font-size: 1.2rem;
       margin-bottom: 10px;
-      border-bottom: 1px solid #eee;
-      padding-bottom: 5px;
+      color: #66ffff;
     }
     #history ul {
       list-style-type: none;
@@ -66,27 +91,19 @@
     }
     #history li {
       padding: 6px 0;
-      border-bottom: 1px solid #f0f0f0;
-      font-size: 0.95em;
+      font-size: 0.9rem;
+      border-bottom: 1px solid #333;
       word-break: break-word;
+      color: #ccc;
     }
-    #controls {
-      margin-top: 15px;
-      display: flex;
-      gap: 10px;
+    #history li a {
+      color: #00e6e6;
+      text-decoration: none;
     }
-    .btn {
-      background-color: #2ecc71;
-      border: none;
-      color: white;
-      padding: 8px 16px;
-      font-size: 0.9em;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background-color 0.3s;
-    }
-    .btn:hover {
-      background-color: #27ae60;
+    #history li a:hover { text-decoration: underline; }
+    @media (max-width: 480px) {
+      h1 { font-size: 1.5rem; }
+      .btn { font-size: 0.85rem; padding: 8px 12px; }
     }
   </style>
 </head>
@@ -99,6 +116,10 @@
     <button class="btn" onclick="clearHistory()">Clear History</button>
     <button class="btn" onclick="toggleScan()" id="toggle-scan-btn">Pause</button>
   </div>
+  <label class="drop-zone">
+    <span>Drag & Drop or Click to Upload QR Image</span>
+    <input type="file" id="upload" accept="image/*" />
+  </label>
   <div id="history">
     <h2>Scan History</h2>
     <ul id="history-list"></ul>
@@ -114,6 +135,18 @@
     const beep = document.getElementById("beep");
     const toggleScanBtn = document.getElementById("toggle-scan-btn");
     const scannedSet = new Set();
+    const uploadInput = document.getElementById("upload");
+
+    // Unlock audio playback on first user interaction
+    document.addEventListener('click', () => {
+      beep.play().catch(() => {});
+    }, { once: true });
+
+    function playBeep() {
+      beep.pause();
+      beep.currentTime = 0;
+      beep.play().catch(err => console.warn("Audio playback failed:", err));
+    }
 
     function isValidUrl(string) {
       try {
@@ -128,7 +161,11 @@
       if (scannedSet.has(text)) return;
       scannedSet.add(text);
       const li = document.createElement("li");
-      li.textContent = text;
+      if (isValidUrl(text)) {
+        li.innerHTML = `<a href="${text}" target="_blank">${text}</a>`;
+      } else {
+        li.textContent = text;
+      }
       historyList.prepend(li);
     }
 
@@ -148,37 +185,22 @@
       isPaused = !isPaused;
     }
 
-    function onScanSuccess(decodedText, decodedResult) {
-      beep.play();
+    function onScanSuccess(decodedText) {
+      playBeep();
       document.getElementById("qr-result").innerText = `Scanned: ${decodedText}`;
-
       const linkPreview = document.getElementById("link-preview");
-      if (isValidUrl(decodedText)) {
-        linkPreview.innerHTML = `<a href="${decodedText}" target="_blank">Open Link</a>`;
-      } else {
-        linkPreview.innerHTML = "";
-      }
-
+      linkPreview.innerHTML = isValidUrl(decodedText)
+        ? `<a href="${decodedText}" target="_blank">Open Link</a>`
+        : "";
       addToHistory(decodedText);
 
       html5QrCode.stop().then(() => {
-        if (!isPaused) {
-          setTimeout(() => {
-            startScanner();
-          }, 3000);
-        }
+        if (!isPaused) setTimeout(() => startScanner(), 3000);
       });
     }
 
     function startScanner() {
-      html5QrCode.start(
-        currentCameraId,
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 }
-        },
-        onScanSuccess
-      ).catch(err => {
+      html5QrCode.start(currentCameraId, { fps: 10, qrbox: 250 }, onScanSuccess).catch(err => {
         document.getElementById("qr-result").innerText = `Start error: ${err}`;
       });
     }
@@ -193,6 +215,25 @@
       }
     }).catch(err => {
       document.getElementById("qr-result").innerText = `Camera access error: ${err}`;
+    });
+
+    uploadInput.addEventListener("change", e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      html5QrCode.stop().then(() => {
+        html5QrCode.scanFile(file, true).then(decodedText => {
+          playBeep();
+          document.getElementById("qr-result").innerText = `Scanned from file: ${decodedText}`;
+          document.getElementById("link-preview").innerHTML = isValidUrl(decodedText)
+            ? `<a href="${decodedText}" target="_blank">Open Link</a>`
+            : "";
+          addToHistory(decodedText);
+          if (!isPaused) setTimeout(() => startScanner(), 3000);
+        }).catch(err => {
+          document.getElementById("qr-result").innerText = `File scan error: ${err}`;
+          if (!isPaused) startScanner();
+        });
+      });
     });
   </script>
 </body>
