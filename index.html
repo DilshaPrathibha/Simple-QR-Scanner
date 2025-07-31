@@ -7,28 +7,66 @@
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f4f6f8;
+      color: #333;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 20px;
+      padding: 40px 20px;
+    }
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 20px;
+      color: #2c3e50;
     }
     #qr-reader {
-      width: 300px;
-      margin-top: 20px;
+      width: 320px;
+      max-width: 100%;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      background: white;
+      padding: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     }
-    #qr-result {
+    #qr-result, #link-preview {
       margin-top: 20px;
-      font-size: 1.2em;
-      font-weight: bold;
-    }
-    #link-preview {
-      margin-top: 10px;
-      font-size: 1em;
+      font-size: 1.1em;
+      text-align: center;
     }
     #link-preview a {
-      color: blue;
+      color: #3498db;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    #link-preview a:hover {
       text-decoration: underline;
+    }
+    #history {
+      margin-top: 30px;
+      width: 100%;
+      max-width: 400px;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+    #history h2 {
+      font-size: 1.2rem;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 5px;
+    }
+    #history ul {
+      list-style-type: none;
+      padding-left: 0;
+    }
+    #history li {
+      padding: 6px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 0.95em;
+      word-break: break-all;
     }
   </style>
 </head>
@@ -37,9 +75,18 @@
   <div id="qr-reader"></div>
   <div id="qr-result">Waiting for scan...</div>
   <div id="link-preview"></div>
+  <div id="history">
+    <h2>Scan History</h2>
+    <ul id="history-list"></ul>
+  </div>
+
+  <audio id="beep" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg" preload="auto"></audio>
 
   <script>
     const html5QrCode = new Html5Qrcode("qr-reader");
+    let currentCameraId = null;
+    const historyList = document.getElementById("history-list");
+    const beep = document.getElementById("beep");
 
     function isValidUrl(string) {
       try {
@@ -50,8 +97,16 @@
       }
     }
 
+    function addToHistory(text) {
+      const li = document.createElement("li");
+      li.textContent = text;
+      historyList.prepend(li);
+    }
+
     function onScanSuccess(decodedText, decodedResult) {
+      beep.play();
       document.getElementById("qr-result").innerText = `Scanned: ${decodedText}`;
+
       const linkPreview = document.getElementById("link-preview");
       if (isValidUrl(decodedText)) {
         linkPreview.innerHTML = `<a href="${decodedText}" target="_blank">Open Link</a>`;
@@ -59,7 +114,8 @@
         linkPreview.innerHTML = "";
       }
 
-      // Continue scanning after short delay
+      addToHistory(decodedText);
+
       html5QrCode.stop().then(() => {
         setTimeout(() => {
           html5QrCode.start(
@@ -72,11 +128,9 @@
           ).catch(err => {
             document.getElementById("qr-result").innerText = `Restart error: ${err}`;
           });
-        }, 3000); // 3 seconds delay before restarting scan
+        }, 3000);
       });
     }
-
-    let currentCameraId = null;
 
     Html5Qrcode.getCameras().then(devices => {
       if (devices && devices.length) {
