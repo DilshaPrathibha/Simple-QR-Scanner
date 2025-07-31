@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time QR Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    #qr-reader {
+      width: 300px;
+      margin-top: 20px;
+    }
+    #qr-result {
+      margin-top: 20px;
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+    #link-preview {
+      margin-top: 10px;
+      font-size: 1em;
+    }
+    #link-preview a {
+      color: blue;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>Real-Time QR Scanner</h1>
+  <div id="qr-reader"></div>
+  <div id="qr-result">Waiting for scan...</div>
+  <div id="link-preview"></div>
+
+  <script>
+    const html5QrCode = new Html5Qrcode("qr-reader");
+
+    function isValidUrl(string) {
+      try {
+        new URL(string);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+      document.getElementById("qr-result").innerText = `Scanned: ${decodedText}`;
+      const linkPreview = document.getElementById("link-preview");
+      if (isValidUrl(decodedText)) {
+        linkPreview.innerHTML = `<a href="${decodedText}" target="_blank">Open Link</a>`;
+      } else {
+        linkPreview.innerHTML = "";
+      }
+
+      // Continue scanning after short delay
+      html5QrCode.stop().then(() => {
+        setTimeout(() => {
+          html5QrCode.start(
+            currentCameraId,
+            {
+              fps: 10,
+              qrbox: { width: 250, height: 250 }
+            },
+            onScanSuccess
+          ).catch(err => {
+            document.getElementById("qr-result").innerText = `Restart error: ${err}`;
+          });
+        }, 3000); // 3 seconds delay before restarting scan
+      });
+    }
+
+    let currentCameraId = null;
+
+    Html5Qrcode.getCameras().then(devices => {
+      if (devices && devices.length) {
+        const backCamera = devices.find(device => device.label.toLowerCase().includes("back")) || devices[0];
+        currentCameraId = backCamera.id;
+
+        html5QrCode.start(
+          currentCameraId,
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 }
+          },
+          onScanSuccess
+        ).catch(err => {
+          document.getElementById("qr-result").innerText = `Start error: ${err}`;
+        });
+      } else {
+        document.getElementById("qr-result").innerText = "No cameras found.";
+      }
+    }).catch(err => {
+      document.getElementById("qr-result").innerText = `Camera access error: ${err}`;
+    });
+  </script>
+</body>
+</html>
