@@ -61,12 +61,32 @@
     #history ul {
       list-style-type: none;
       padding-left: 0;
+      max-height: 200px;
+      overflow-y: auto;
     }
     #history li {
       padding: 6px 0;
       border-bottom: 1px solid #f0f0f0;
       font-size: 0.95em;
-      word-break: break-all;
+      word-break: break-word;
+    }
+    #controls {
+      margin-top: 15px;
+      display: flex;
+      gap: 10px;
+    }
+    .btn {
+      background-color: #2ecc71;
+      border: none;
+      color: white;
+      padding: 8px 16px;
+      font-size: 0.9em;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .btn:hover {
+      background-color: #27ae60;
     }
   </style>
 </head>
@@ -75,6 +95,10 @@
   <div id="qr-reader"></div>
   <div id="qr-result">Waiting for scan...</div>
   <div id="link-preview"></div>
+  <div id="controls">
+    <button class="btn" onclick="clearHistory()">Clear History</button>
+    <button class="btn" onclick="toggleScan()" id="toggle-scan-btn">Pause</button>
+  </div>
   <div id="history">
     <h2>Scan History</h2>
     <ul id="history-list"></ul>
@@ -85,8 +109,11 @@
   <script>
     const html5QrCode = new Html5Qrcode("qr-reader");
     let currentCameraId = null;
+    let isPaused = false;
     const historyList = document.getElementById("history-list");
     const beep = document.getElementById("beep");
+    const toggleScanBtn = document.getElementById("toggle-scan-btn");
+    const scannedSet = new Set();
 
     function isValidUrl(string) {
       try {
@@ -98,9 +125,27 @@
     }
 
     function addToHistory(text) {
+      if (scannedSet.has(text)) return;
+      scannedSet.add(text);
       const li = document.createElement("li");
       li.textContent = text;
       historyList.prepend(li);
+    }
+
+    function clearHistory() {
+      historyList.innerHTML = "";
+      scannedSet.clear();
+    }
+
+    function toggleScan() {
+      if (isPaused) {
+        startScanner();
+        toggleScanBtn.textContent = "Pause";
+      } else {
+        html5QrCode.stop();
+        toggleScanBtn.textContent = "Resume";
+      }
+      isPaused = !isPaused;
     }
 
     function onScanSuccess(decodedText, decodedResult) {
@@ -117,18 +162,24 @@
       addToHistory(decodedText);
 
       html5QrCode.stop().then(() => {
-        setTimeout(() => {
-          html5QrCode.start(
-            currentCameraId,
-            {
-              fps: 10,
-              qrbox: { width: 250, height: 250 }
-            },
-            onScanSuccess
-          ).catch(err => {
-            document.getElementById("qr-result").innerText = `Restart error: ${err}`;
-          });
-        }, 3000);
+        if (!isPaused) {
+          setTimeout(() => {
+            startScanner();
+          }, 3000);
+        }
+      });
+    }
+
+    function startScanner() {
+      html5QrCode.start(
+        currentCameraId,
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 }
+        },
+        onScanSuccess
+      ).catch(err => {
+        document.getElementById("qr-result").innerText = `Start error: ${err}`;
       });
     }
 
@@ -136,17 +187,7 @@
       if (devices && devices.length) {
         const backCamera = devices.find(device => device.label.toLowerCase().includes("back")) || devices[0];
         currentCameraId = backCamera.id;
-
-        html5QrCode.start(
-          currentCameraId,
-          {
-            fps: 10,
-            qrbox: { width: 250, height: 250 }
-          },
-          onScanSuccess
-        ).catch(err => {
-          document.getElementById("qr-result").innerText = `Start error: ${err}`;
-        });
+        startScanner();
       } else {
         document.getElementById("qr-result").innerText = "No cameras found.";
       }
